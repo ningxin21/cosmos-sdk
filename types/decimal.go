@@ -56,6 +56,21 @@ func init() {
 	}
 }
 
+var Precision2 = int64(6)
+
+func ResetPrec(prec int64) {
+	Precision2 = prec
+	precisionReuse       = new(big.Int).Exp(big.NewInt(10), big.NewInt(Precision2), nil)
+	fivePrecision        = new(big.Int).Quo(precisionReuse, big.NewInt(2))
+	zeroInt              = big.NewInt(0)
+	oneInt               = big.NewInt(1)
+	tenInt               = big.NewInt(10)
+	precisionMultipliers = make([]*big.Int, Precision2+1)
+	for i := 0; i <= int(Precision2); i++ {
+		precisionMultipliers[i] = calcPrecisionMultiplier2(int64(i))
+	}
+}
+
 func precisionInt() *big.Int {
 	return new(big.Int).Set(precisionReuse)
 }
@@ -70,6 +85,15 @@ func calcPrecisionMultiplier(prec int64) *big.Int {
 		panic(fmt.Sprintf("too much precision, maximum %v, provided %v", Precision, prec))
 	}
 	zerosToAdd := Precision - prec
+	multiplier := new(big.Int).Exp(tenInt, big.NewInt(zerosToAdd), nil)
+	return multiplier
+}
+
+func calcPrecisionMultiplier2(prec int64) *big.Int {
+	if prec > Precision2 {
+		panic(fmt.Sprintf("too much precision, maximum %v, provided %v", Precision2, prec))
+	}
+	zerosToAdd := Precision2 - prec
 	multiplier := new(big.Int).Exp(tenInt, big.NewInt(zerosToAdd), nil)
 	return multiplier
 }
@@ -463,6 +487,58 @@ func (d Dec) String() string {
 		// inputSize + 1 to account for the decimal point that is being added
 		bzStr = make([]byte, inputSize+1)
 		decPointPlace := inputSize - Precision
+
+		copy(bzStr, bzInt[:decPointPlace])                   // pre-decimal digits
+		bzStr[decPointPlace] = byte('.')                     // decimal point
+		copy(bzStr[decPointPlace+1:], bzInt[decPointPlace:]) // post-decimal digits
+	}
+
+	if isNeg {
+		return "-" + string(bzStr)
+	}
+
+	return string(bzStr)
+}
+
+func (d Dec) NewPrecString() string {
+	if d.i == nil {
+		return d.i.String()
+	}
+
+	isNeg := d.IsNegative()
+
+	if isNeg {
+		d = d.Neg()
+	}
+
+	bzInt, err := d.i.MarshalText()
+	if err != nil {
+		return ""
+	}
+	inputSize := len(bzInt)
+
+	var bzStr []byte
+
+	// TODO: Remove trailing zeros
+	// case 1, purely decimal
+	if inputSize <= int(Precision2) {
+		bzStr = make([]byte, Precision2+2)
+
+		// 0. prefix
+		bzStr[0] = byte('0')
+		bzStr[1] = byte('.')
+
+		// set relevant digits to 0
+		for i := 0; i < int(Precision2)-inputSize; i++ {
+			bzStr[i+2] = byte('0')
+		}
+
+		// set final digits
+		copy(bzStr[2+(int(Precision2)-inputSize):], bzInt)
+	} else {
+		// inputSize + 1 to account for the decimal point that is being added
+		bzStr = make([]byte, inputSize+1)
+		decPointPlace := inputSize - int(Precision2)
 
 		copy(bzStr, bzInt[:decPointPlace])                   // pre-decimal digits
 		bzStr[decPointPlace] = byte('.')                     // decimal point
