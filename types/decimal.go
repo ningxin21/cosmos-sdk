@@ -20,7 +20,7 @@ type Dec struct {
 
 const (
 	// number of decimal places
-	Precision = 18
+	Precision = 6
 
 	// bytes required to represent the above precision
 	// Ceiling[Log2[999 999 999 999 999 999]]
